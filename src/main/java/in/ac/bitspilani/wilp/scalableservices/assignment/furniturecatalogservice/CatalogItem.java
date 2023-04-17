@@ -1,6 +1,10 @@
 package in.ac.bitspilani.wilp.scalableservices.assignment.furniturecatalogservice;
 
+import java.math.BigDecimal;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -24,7 +28,10 @@ public class CatalogItem
     private UUID itemId = UUID.randomUUID();
     private String itemName;
     private UUID itemTypeId;
-    private String[] colors;
+    @Builder.Default
+    private List<String> colors = new ArrayList<>(1);
     private URL photoS3Url;
-    private Map<String, Object> itemDetails;
+    @Builder.Default
+    private Map<String, Object> itemDetails = new LinkedHashMap<>();
+    private BigDecimal price;
 }

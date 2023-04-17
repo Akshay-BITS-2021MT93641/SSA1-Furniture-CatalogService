@@ -1,9 +1,11 @@
 package in.ac.bitspilani.wilp.scalableservices.assignment.furniturecatalogservice;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.UUID;
 
+import org.apache.commons.lang3.ArrayUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Example;
 import org.springframework.lang.Nullable;
@@ -94,7 +96,7 @@ public class FurnitureCatalogServiceController
                             .itemId(null) //overwrite default for example search
                             .itemName(itemName)
                             .itemTypeId(Objects.nonNull(itemTypeDb)?itemTypeDb.getId():null)
-                            .colors(colors)
+                            .colors(ArrayUtils.isNotEmpty(colors)?Arrays.asList(colors):null)
                             .build();
                     
                     return catalogItemRepository.findAll(Example.of(example));
@@ -129,5 +131,17 @@ public class FurnitureCatalogServiceController
     public Mono<CatalogItem> getCatalogItem(@PathVariable UUID catalogItemId)
     {
         return catalogItemRepository.findById(catalogItemId);        
+    }
+    
+    @GetMapping("/getCatalogItemWithStock/{catalogItemId}")
+    public Mono<CatalogItemSearchResult> getCatalogItemWithStock(@PathVariable UUID catalogItemId)
+    {
+        return catalogItemRepository.findById(catalogItemId)
+                        .flatMap(item->catalogInventoryDao.getStock(item.getItemId())
+                                .onErrorResume(t->{
+                                    log.warn("Unable to get stock.", t);
+                                    return Mono.just(Collections.emptyMap());
+                                })
+                                .map(cs->CatalogItemSearchResult.builder().catalogItem(item).colorWiseStock(cs).build()));     
     }
 }
