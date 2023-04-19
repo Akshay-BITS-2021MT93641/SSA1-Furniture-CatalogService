@@ -1,16 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Configuration>
+	<Properties>
+		<Property name="filename">/tmp/ssa1/logs/furniture-catalog-service</Property>
+	</Properties>
     <Appenders>
         <Console name="Console" target="SYSTEM_OUT">
             <PatternLayout
-                pattern="[%style{%d{ISO8601}}{black}] [%highlight{%level }] [%style{%t}{bright,blue}] [%style{%C}{bright,yellow}]: %msg%n%throwable" />
+                pattern="[%style{%d{ISO8601}}{black}] [%highlight{%level }] [%style{%t}{bright,blue}] [%style{%C}{bright,magenta}]: %msg%n%throwable" />
         </Console>
+        <RollingFile name="RollingFile" fileName="${filename}.log" filePattern="${filename}-%d{MM-dd-yyyy}.log.gz">
+			<PatternLayout>
+				<Pattern>[%d{ISO8601}] [%level] [%t] [%C]: %msg%n%throwable</Pattern>
+			</PatternLayout>
+			<Policies>
+				<TimeBasedTriggeringPolicy />
+				<SizeBasedTriggeringPolicy size="250 MB" />
+			</Policies>
+		</RollingFile>
     </Appenders>
 
     <Loggers>
         <!-- LOG everything at INFO level -->
         <Root level="info">
             <AppenderRef ref="Console" />
+            <AppenderRef ref="RollingFile" />
         </Root>
 
         <Logger name="in.ac.bitspilani.wilp.scalableservices.assignment" level="debug"/>
