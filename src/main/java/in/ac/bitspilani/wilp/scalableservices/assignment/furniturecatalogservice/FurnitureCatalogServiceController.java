@@ -8,6 +8,9 @@ import java.util.UUID;
 import org.apache.commons.lang3.ArrayUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Example;
+import org.springframework.data.mongodb.core.ReactiveMongoOperations;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.lang.Nullable;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,8 +21,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import in.ac.bitspilani.wilp.scalableservices.assignment.furniturecatalogservice.dao.FurnitureInventoryDao;
 import in.ac.bitspilani.wilp.scalableservices.assignment.furniturecatalogservice.dao.CatalogItemRepository;
+import in.ac.bitspilani.wilp.scalableservices.assignment.furniturecatalogservice.dao.FurnitureInventoryDao;
 import in.ac.bitspilani.wilp.scalableservices.assignment.furniturecatalogservice.dao.ItemTypeRepository;
 import lombok.extern.log4j.Log4j2;
 import reactor.core.publisher.Flux;
@@ -38,8 +41,11 @@ public class FurnitureCatalogServiceController
     
     @Autowired
     private FurnitureInventoryDao catalogInventoryDao;
+    
+    @Autowired
+    private ReactiveMongoOperations reactiveMongoOperations;
 
-    @PutMapping("/addItemType")
+    @PutMapping("/itemTypes")
     public Mono<ItemType> addItemType(@RequestParam String itemType)
     {
         return
@@ -57,13 +63,25 @@ public class FurnitureCatalogServiceController
                 });
     }
     
-    @GetMapping("/findItemType")
-    public Mono<ItemType> findItemType(@RequestParam String itemType) 
+    @GetMapping("/itemTypes/{itemType}")
+    public Mono<ItemType> findItemType(@PathVariable String itemType) 
     {
         return itemTypeRepository.findByItemType(itemType);
     }
     
-    @PutMapping("/addCatalogItem")
+    @GetMapping("/itemTypes/{itemTypeId}")
+    public Mono<ItemType> findItemTypeById(@PathVariable UUID itemTypeId) 
+    {
+        return itemTypeRepository.findById(itemTypeId);
+    }
+    
+    @GetMapping("/itemTypes")
+    public Flux<ItemType> findAllItemType() 
+    {
+        return itemTypeRepository.findAll();
+    }
+    
+    @PutMapping("/catalogItems")
     public Mono<CatalogItem> addCatalogItem(@RequestBody CatalogItem catalogItem) 
     {
         return
@@ -80,8 +98,38 @@ public class FurnitureCatalogServiceController
                 });
     }
     
-    @GetMapping("/findCatalogItem")
-    public Flux<CatalogItemSearchResult> findCatalogItem(
+    @GetMapping("/catalogItems")
+    public Flux<CatalogItemSearchResult> getAllCatalogItem()
+    {
+        return catalogItemRepository.findAll()
+                        .flatMap(item->catalogInventoryDao.getStock(item.getItemId())
+                                .onErrorResume(t->{
+                                    log.warn("Unable to get stock.", t);
+                                    return Mono.just(Collections.emptyMap());
+                                })
+                                .map(cs->CatalogItemSearchResult.builder().catalogItem(item).colorWiseStock(cs).build()));
+    }
+    
+    @GetMapping("/catalogItems/{catalogItemId}")
+    public Mono<CatalogItemSearchResult> getCatalogItem(@PathVariable UUID catalogItemId)
+    {
+        return catalogItemRepository.findById(catalogItemId)
+                        .flatMap(item->catalogInventoryDao.getStock(item.getItemId())
+                                .onErrorResume(t->{
+                                    log.warn("Unable to get stock.", t);
+                                    return Mono.just(Collections.emptyMap());
+                                })
+                                .map(cs->CatalogItemSearchResult.builder().catalogItem(item).colorWiseStock(cs).build()));
+    }
+    
+    @GetMapping("/catalogItems/minusInventory/{catalogItemId}")
+    public Mono<CatalogItem> getCatalogItemMinusInventory(@PathVariable UUID catalogItemId)
+    {
+        return catalogItemRepository.findById(catalogItemId);
+    }
+    
+    @GetMapping("/searchCatalogItem")
+    public Flux<CatalogItemSearchResult> searchCatalogItem(
             @Nullable @RequestParam String itemName
             , @Nullable @RequestParam String itemType
             , @Nullable @RequestParam String[] colors)
@@ -109,39 +157,20 @@ public class FurnitureCatalogServiceController
                                         .map(cs->CatalogItemSearchResult.builder().catalogItem(item).colorWiseStock(cs).build()));
     }
     
-    @PostMapping("/updateCatalogItem") 
-    public Mono<CatalogItem> updateCatalogItem(@RequestBody CatalogItem catalogItem)
-    {
-        return
-                catalogItemRepository.findByItemNameAndItemTypeId(catalogItem.getItemName(), catalogItem.getItemTypeId())
-                .switchIfEmpty(Mono.error(()->new IllegalArgumentException("Catalog item does not exists")))
-                .flatMap(exists->catalogItemRepository.save(catalogItem.toBuilder().itemId(exists.getItemId()).build()));
-    }
-    
-    @DeleteMapping("/deleteCatalogItem/{catalogItemId}")
-    public Mono<CatalogItem> deleteCatalogItem(@PathVariable UUID catalogItemId)
+    @PostMapping("/catalogItems/{catalogItemId}") 
+    public Mono<CatalogItem> updateCatalogItem(@PathVariable UUID catalogItemId, @RequestBody CatalogItem catalogItem)
     {
         return
                 catalogItemRepository.findById(catalogItemId)
                 .switchIfEmpty(Mono.error(()->new IllegalArgumentException("Catalog item does not exists")))
-                .doOnSuccess(item->catalogItemRepository.deleteById(catalogItemId));        
+                .flatMap(exists->catalogItemRepository.save(catalogItem.toBuilder().itemId(exists.getItemId()).build()));
     }
     
-    @GetMapping("/getCatalogItem/{catalogItemId}")
-    public Mono<CatalogItem> getCatalogItem(@PathVariable UUID catalogItemId)
+    @DeleteMapping("/catalogItems/{catalogItemId}")
+    public Mono<CatalogItem> deleteCatalogItem(@PathVariable UUID catalogItemId)
     {
-        return catalogItemRepository.findById(catalogItemId);        
-    }
-    
-    @GetMapping("/getCatalogItemWithStock/{catalogItemId}")
-    public Mono<CatalogItemSearchResult> getCatalogItemWithStock(@PathVariable UUID catalogItemId)
-    {
-        return catalogItemRepository.findById(catalogItemId)
-                        .flatMap(item->catalogInventoryDao.getStock(item.getItemId())
-                                .onErrorResume(t->{
-                                    log.warn("Unable to get stock.", t);
-                                    return Mono.just(Collections.emptyMap());
-                                })
-                                .map(cs->CatalogItemSearchResult.builder().catalogItem(item).colorWiseStock(cs).build()));     
+        Query query = Query.query(Criteria.where("_id").is(catalogItemId));
+        return reactiveMongoOperations.findAndRemove(query, CatalogItem.class)
+                    .switchIfEmpty(Mono.error(()->new IllegalArgumentException("Catalog item does not exists")));
     }
 }

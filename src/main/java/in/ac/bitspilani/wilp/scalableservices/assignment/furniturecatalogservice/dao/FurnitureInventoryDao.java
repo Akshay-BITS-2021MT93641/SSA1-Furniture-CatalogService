@@ -2,6 +2,7 @@ package in.ac.bitspilani.wilp.scalableservices.assignment.furniturecatalogservic
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -28,7 +29,6 @@ public class FurnitureInventoryDao
                 .retrieve()
                 .bodyToMono(Map.class)
                 .switchIfEmpty(Mono.just(Collections.emptyMap()))
-                .map(m->(Map<String, Integer>)m.get("colorWiseStock"))
-                .switchIfEmpty(Mono.just(Collections.emptyMap()));        
+                .map(m->Optional.ofNullable((Map<String, Integer>)m.get("colorWiseStock")).orElse(Collections.emptyMap()));
     }
 }
